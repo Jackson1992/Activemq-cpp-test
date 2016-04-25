@@ -63,8 +63,8 @@ std::mutex m_lock;
 
 ////////////////////////////////////////////////////////////////////////////////
 class Consumer : public ExceptionListener,
-                            public MessageListener,
-                            public DefaultTransportListener {
+                 public MessageListener,
+                 public DefaultTransportListener {
  private:
   Connection* connection_;
   Session* session_;
@@ -81,7 +81,7 @@ class Consumer : public ExceptionListener,
 
  public:
   Consumer(const std::string& brokerURI, const std::string& destURI,
-                      bool use_topic = false, bool client_ack = false)
+           bool use_topic = false, bool client_ack = false)
       : connection_(NULL),
         session_(NULL),
         destination_(NULL),
@@ -158,6 +158,7 @@ class Consumer : public ExceptionListener,
 
       if (textMessage != NULL) {
         text = textMessage->getText();
+        cout << text << endl;
       } else {
         text = "NOT A TEXTMESSAGE!";
       }
@@ -237,9 +238,9 @@ class Consumer : public ExceptionListener,
 ////////////////////////////////////////////////////////////////////////////////
 // int main(int argc AMQCPP_UNUSED, char* argv[] AMQCPP_UNUSED) {
 void ClientInitialize() {
-  m_lock.lock();
-  activemq::library::ActiveMQCPP::initializeLibrary();
-  m_lock.unlock();
+  //  m_lock.lock();
+  //  activemq::library::ActiveMQCPP::initializeLibrary();
+  //  m_lock.unlock();
 
   std::cout << "=====================================================\n";
   std::cout << "Starting the example:" << std::endl;
@@ -301,21 +302,19 @@ void ClientInitialize() {
   consumer.runConsumer();
 
   // Wait to exit.
-  std::cout << "Press 'q' to quit" << std::endl;
   while (std::cin.get() != 'q') {
   }
-
   // All CMS resources should be closed before the library is shutdown.
   consumer.close();
 
   std::cout << "-----------------------------------------------------\n";
   std::cout << "Finished with the example." << std::endl;
   std::cout << "=====================================================\n";
-
-  activemq::library::ActiveMQCPP::shutdownLibrary();
+  //  activemq::library::ActiveMQCPP::shutdownLibrary();
 }
 int main() {
-  int thread_count = 1;
+  activemq::library::ActiveMQCPP::initializeLibrary();
+  int thread_count = 4;
   vector<std::thread> threads;
   for (int i = 0; i < thread_count; i++) {
     threads.push_back(std::thread(ClientInitialize));
@@ -323,5 +322,6 @@ int main() {
   for (auto& t : threads) {
     t.join();
   }
+  activemq::library::ActiveMQCPP::shutdownLibrary();
   return EXIT_SUCCESS;
 }

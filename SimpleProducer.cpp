@@ -127,7 +127,7 @@ class Producer : public Runnable {
       string title = table_name_ + (string) ",|,\n";
       string body = GetText(file1, "\n");
       string text = title + body;
-      cout << text << endl;
+      //      cout << text << endl;
       TextMessage* message = session_->createTextMessage(text);
       message->setIntProperty("Integer", ix);
       producer_->send(message);
@@ -173,7 +173,7 @@ class Producer : public Runnable {
       timeval start;
       gettimeofday(&start, NULL);
       vector<std::thread> threads;
-      int thread_count = 4;
+      int thread_count = 12;
       for (int i = 1; i <= thread_count; i++) {
         //        string tmp = filename + (char)(i + 48);
         cout << file_path_ << endl;
