@@ -1,0 +1,306 @@
+/*
+ * Copyright [2012-2015] DaSE@ECNU
+ *
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * /ActiveMQ_c/SimpleProducer.cpp
+ *
+ *  Created on: 2016年4月9日
+ *      Author: Han
+ *		   Email:
+ *
+ * Description:
+ *
+ */
+
+#include <decaf/lang/Thread.h>
+#include <decaf/lang/Runnable.h>
+#include <decaf/util/concurrent/CountDownLatch.h>
+#include <decaf/lang/Long.h>
+#include <decaf/util/Date.h>
+#include <activemq/core/ActiveMQConnectionFactory.h>
+#include <activemq/util/Config.h>
+#include <activemq/library/ActiveMQCPP.h>
+#include <cms/Connection.h>
+#include <cms/Session.h>
+#include <cms/TextMessage.h>
+#include <cms/BytesMessage.h>
+#include <cms/MapMessage.h>
+#include <cms/ExceptionListener.h>
+#include <cms/MessageListener.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <iostream>
+#include <fstream>
+#include <vector>
+#include <memory>
+#include <sys/time.h>
+#include <thread>
+
+using namespace activemq;
+using namespace activemq::core;
+using namespace decaf;
+using namespace decaf::lang;
+using namespace decaf::util;
+using namespace decaf::util::concurrent;
+using namespace cms;
+using namespace std;
+
+////////////////////////////////////////////////////////////////////////////////
+class Producer : public Runnable {
+ private:
+  Connection* connection_;
+  Session* session_;
+  Destination* destination_;
+  MessageProducer* producer_;
+  bool use_topic_;
+  bool client_ack_;
+  unsigned int num_messages_;
+  std::string brokerURI_;
+  std::string destURI_;
+
+ private:
+  Producer(const SimpleProducer&);
+  Producer& operator=(const SimpleProducer&);
+
+ public:
+  Producer(const std::string& brokerURI, unsigned int num_messages,
+           const std::string& destURI, bool use_topic = false,
+           bool client_ack = false)
+      : connection_(NULL),
+        session_(NULL),
+        destination_(NULL),
+        producer_(NULL),
+        use_topic_(use_topic),
+        client_ack_(client_ack),
+        num_messages_(num_messages),
+        brokerURI_(brokerURI),
+        destURI_(destURI) {}
+
+  virtual ~Producer() { cleanup(); }
+
+  string GetText(ifstream& file1, const string& row_dsp) {
+    int count = 0;
+    string c = "";
+    size_t cur_p = 0;
+    if (file1.is_open()) {
+      char* str1 = (char*)malloc(1000);
+      if (1 == row_dsp.length()) {
+        do {
+          file1.getline(str1, 1000, (char)row_dsp[0]);
+          if (file1.eof()) break;
+          //          cout << str1 << endl;
+          long int length = strlen(str1);
+          //          cout << "the length is " << length << endl;
+          c += str1;
+          c += row_dsp;
+          count++;
+        } while (count < 150);
+      }
+      free(str1);
+    }
+    return c;
+  }
+  void SendMessage(string filename) {
+    ifstream file1;
+    file1.open(filename.c_str());
+    for (unsigned int ix = 0; ix < num_messages_; ++ix) {
+      if (file1.eof()) break;
+      string title = "lineitem,|,/n";
+      string text = GetText(file1, "\n");
+      TextMessage* message = session_->createTextMessage(text);
+      message->setIntProperty("Integer", ix);
+      producer_->send(message);
+      delete message;
+    }
+    file1.close();
+  }
+
+  void close() { this->cleanup(); }
+
+  virtual void run() {
+    try {
+      // Create a ConnectionFactory
+      auto_ptr<ActiveMQConnectionFactory> connectionFactory(
+          new ActiveMQConnectionFactory(brokerURI_));
+
+      // Create a Connection
+      try {
+        connection_ = connectionFactory->createConnection();
+        connection_->start();
+      } catch (CMSException& e) {
+        e.printStackTrace();
+        throw e;
+      }
+
+      // Create a Session
+      if (client_ack_) {
+        session_ = connection_->createSession(Session::CLIENT_ACKNOWLEDGE);
+      } else {
+        session_ = connection_->createSession(Session::AUTO_ACKNOWLEDGE);
+      }
+
+      // Create the destination (Topic or Queue)
+      if (use_topic_) {
+        destination_ = session_->createTopic(destURI_);
+      } else {
+        destination_ = session_->createQueue(destURI_);
+      }
+
+      // Create a MessageProducer from the Session to the Topic or Queue
+      producer_ = session_->createProducer(destination_);
+      producer_->setDeliveryMode(DeliveryMode::NON_PERSISTENT);
+      timeval start;
+      gettimeofday(&start, NULL);
+      vector<std::thread> threads;
+      int thread_count = 4;
+      string filename = "/home/Han/rawData/tpch-raw-data/tpch_sf1/lineitem.tbl";
+      for (int i = 1; i <= thread_count; i++) {
+        string tmp = filename + (char)(i + 48);
+        cout << tmp << endl;
+        threads.push_back(std::thread(&Producer::SendMessage, this, tmp));
+      }
+      for (auto& t : threads) {
+        t.join();
+      }
+
+      timeval end;
+      gettimeofday(&end, NULL);
+      cout << "send message time :"
+           << (end.tv_usec - start.tv_usec) / 1000.0 +
+                  (end.tv_sec - start.tv_sec) * 1000.0;
+
+    } catch (CMSException& e) {
+      e.printStackTrace();
+    }
+  }
+
+ private:
+  void cleanup() {
+    // Destroy resources.
+    try {
+      if (destination_ != NULL) delete destination_;
+    } catch (CMSException& e) {
+      e.printStackTrace();
+    }
+    destination_ = NULL;
+
+    try {
+      if (producer_ != NULL) delete producer_;
+    } catch (CMSException& e) {
+      e.printStackTrace();
+    }
+    producer_ = NULL;
+
+    // Close open resources.
+    try {
+      if (session_ != NULL) session_->close();
+      if (connection_ != NULL) connection_->close();
+    } catch (CMSException& e) {
+      e.printStackTrace();
+    }
+
+    try {
+      if (session_ != NULL) delete session_;
+    } catch (CMSException& e) {
+      e.printStackTrace();
+    }
+    session_ = NULL;
+
+    try {
+      if (connection_ != NULL) delete connection_;
+    } catch (CMSException& e) {
+      e.printStackTrace();
+    }
+    connection_ = NULL;
+  }
+};
+
+////////////////////////////////////////////////////////////////////////////////
+int main(int argc AMQCPP_UNUSED, char* argv[] AMQCPP_UNUSED) {
+  //  getopt();/
+  if (argc < 3) perror("error");
+
+  string path = argv[1];  // first parameter
+
+  string table_name = argv[2];  // table name
+
+  activemq::library::ActiveMQCPP::initializeLibrary();
+
+  std::cout << "=====================================================\n";
+  std::cout << "Starting the example:" << std::endl;
+  std::cout << "-----------------------------------------------------\n";
+
+  // Set the URI to point to the IPAddress of your broker.
+  // add any optional params to the url to enable things like
+  // tightMarshalling or tcp logging etc.  See the CMS web site for
+  // a full list of configuration options.
+  //
+  //  http://activemq.apache.org/cms/
+  //
+  // Wire Format Options:
+  // =====================
+  // Use either stomp or openwire, the default ports are different for each
+  //
+  // Examples:
+  //    tcp://127.0.0.1:61616                      default to openwire
+  //    tcp://127.0.0.1:61616?wireFormat=openwire  same as above
+  //    tcp://127.0.0.1:61613?wireFormat=stomp     use stomp instead
+  //
+  std::string brokerURI =
+      "failover://(tcp://127.0.0.1:61616"
+      "?wireFormat=openwire"
+      "&connection.useAsyncSend=true"
+      //        "&transport.commandTracingEnabled=true"
+      //        "&transport.tcpTracingEnabled=true"
+      //        "&wireFormat.tightEncodingEnabled=true"
+      ")";
+
+  //============================================================
+  // Total number of messages for this producer to send.
+  //============================================================
+  unsigned int num_messages = 20000;
+
+  //============================================================
+  // This is the Destination Name and URI options.  Use this to
+  // customize where the Producer produces, to have the producer
+  // use a topic or queue set the 'useTopics' flag.
+  //============================================================
+  std::string destURI = "t123";
+
+  //============================================================
+  // set to true to use topics instead of queues
+  // Note in the code above that this causes createTopic or
+  // createQueue to be used in the producer.
+  //============================================================
+  bool use_topics = false;
+
+  // Create the producer_ and run it.
+  Producer producer(brokerURI, num_messages, destURI, use_topics);
+
+  // Publish the given number of Messages
+  producer.run();
+
+  // Before exiting we ensure that all CMS resources are closed.
+  producer.close();
+
+  std::cout << "-----------------------------------------------------\n";
+  std::cout << "Finished with the example." << std::endl;
+  std::cout << "=====================================================\n";
+
+  activemq::library::ActiveMQCPP::shutdownLibrary();
+  return EXIT_SUCCESS;
+}
