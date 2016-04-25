@@ -73,8 +73,8 @@ class Producer : public Runnable {
   std::string destURI_;
 
  private:
-  Producer(const SimpleProducer&);
-  Producer& operator=(const SimpleProducer&);
+  Producer(const Producer&);
+  Producer& operator=(const Producer&);
 
  public:
   Producer(const std::string& brokerURI, unsigned int num_messages,
