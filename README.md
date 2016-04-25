@@ -14,3 +14,7 @@ CPPUnit     >= 1.10.2* ( 1.12.1 is recommended )
 OpenSSL     >= 0.9.8m* ( 1.0.0 or higher is recommended, this is an optional dependency)
 
 * Requires that the Development package also be installed.
+
+编译的文件需要的库文件和静态链接库
+-I/usr/local/include/activemq-cpp-3.9.3 -I/usr/local/apr/include/apr-1
+-lactivemq-cpp -lpthreaD
