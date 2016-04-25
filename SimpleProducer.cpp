@@ -71,6 +71,8 @@ class Producer : public Runnable {
   unsigned int num_messages_;
   std::string brokerURI_;
   std::string destURI_;
+  std::string file_path_;
+  std::string table_name_;
 
  private:
   Producer(const Producer&);
@@ -78,7 +80,8 @@ class Producer : public Runnable {
 
  public:
   Producer(const std::string& brokerURI, unsigned int num_messages,
-           const std::string& destURI, bool use_topic = false,
+           const std::string& destURI, const std::string& file_path,
+           const std::string& table_name, bool use_topic = false,
            bool client_ack = false)
       : connection_(NULL),
         session_(NULL),
@@ -88,7 +91,9 @@ class Producer : public Runnable {
         client_ack_(client_ack),
         num_messages_(num_messages),
         brokerURI_(brokerURI),
-        destURI_(destURI) {}
+        destURI_(destURI),
+        file_path_(file_path),
+        table_name_(table_name) {}
 
   virtual ~Producer() { cleanup(); }
 
@@ -119,8 +124,10 @@ class Producer : public Runnable {
     file1.open(filename.c_str());
     for (unsigned int ix = 0; ix < num_messages_; ++ix) {
       if (file1.eof()) break;
-      string title = "lineitem,|,/n";
-      string text = GetText(file1, "\n");
+      string title = table_name_ + (string) ",|,\n";
+      string body = GetText(file1, "\n");
+      string text = title + body;
+      cout << text << endl;
       TextMessage* message = session_->createTextMessage(text);
       message->setIntProperty("Integer", ix);
       producer_->send(message);
@@ -167,11 +174,11 @@ class Producer : public Runnable {
       gettimeofday(&start, NULL);
       vector<std::thread> threads;
       int thread_count = 4;
-      string filename = "/home/Han/rawData/tpch-raw-data/tpch_sf1/lineitem.tbl";
       for (int i = 1; i <= thread_count; i++) {
-        string tmp = filename + (char)(i + 48);
-        cout << tmp << endl;
-        threads.push_back(std::thread(&Producer::SendMessage, this, tmp));
+        //        string tmp = filename + (char)(i + 48);
+        cout << file_path_ << endl;
+        threads.push_back(
+            std::thread(&Producer::SendMessage, this, file_path_));
       }
       for (auto& t : threads) {
         t.join();
@@ -230,13 +237,13 @@ class Producer : public Runnable {
 };
 
 ////////////////////////////////////////////////////////////////////////////////
-int main(int argc AMQCPP_UNUSED, char* argv[] AMQCPP_UNUSED) {
+int main(int argc, char* argv[]) {
   //  getopt();/
   if (argc < 3) perror("error");
 
-  string path = argv[1];  // first parameter
+  std::string file_path = argv[1];  // first parameter
 
-  string table_name = argv[2];  // table name
+  std::string table_name = argv[2];  // table name
 
   activemq::library::ActiveMQCPP::initializeLibrary();
 
@@ -272,7 +279,7 @@ int main(int argc AMQCPP_UNUSED, char* argv[] AMQCPP_UNUSED) {
   //============================================================
   // Total number of messages for this producer to send.
   //============================================================
-  unsigned int num_messages = 20000;
+  unsigned int num_messages = 200000;
 
   //============================================================
   // This is the Destination Name and URI options.  Use this to
@@ -288,8 +295,11 @@ int main(int argc AMQCPP_UNUSED, char* argv[] AMQCPP_UNUSED) {
   //============================================================
   bool use_topics = false;
 
+  bool client_ack = false;
+
   // Create the producer_ and run it.
-  Producer producer(brokerURI, num_messages, destURI, use_topics);
+  Producer producer(brokerURI, num_messages, destURI, file_path, table_name,
+                    use_topics, client_ack);
 
   // Publish the given number of Messages
   producer.run();
