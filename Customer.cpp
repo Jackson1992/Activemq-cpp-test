@@ -59,7 +59,6 @@ using namespace decaf::util;
 using namespace decaf::util::concurrent;
 using namespace cms;
 using namespace std;
-std::mutex m_lock;
 
 ////////////////////////////////////////////////////////////////////////////////
 class Consumer : public ExceptionListener,
@@ -158,7 +157,6 @@ class Consumer : public ExceptionListener,
 
       if (textMessage != NULL) {
         text = textMessage->getText();
-        cout << text << endl;
       } else {
         text = "NOT A TEXTMESSAGE!";
       }
@@ -236,12 +234,7 @@ class Consumer : public ExceptionListener,
 };
 
 ////////////////////////////////////////////////////////////////////////////////
-// int main(int argc AMQCPP_UNUSED, char* argv[] AMQCPP_UNUSED) {
 void ClientInitialize() {
-  //  m_lock.lock();
-  //  activemq::library::ActiveMQCPP::initializeLibrary();
-  //  m_lock.unlock();
-
   std::cout << "=====================================================\n";
   std::cout << "Starting the example:" << std::endl;
   std::cout << "-----------------------------------------------------\n";
@@ -310,7 +303,6 @@ void ClientInitialize() {
   std::cout << "-----------------------------------------------------\n";
   std::cout << "Finished with the example." << std::endl;
   std::cout << "=====================================================\n";
-  //  activemq::library::ActiveMQCPP::shutdownLibrary();
 }
 int main() {
   activemq::library::ActiveMQCPP::initializeLibrary();
